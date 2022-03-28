@@ -23,7 +23,7 @@ module.exports = {
         });
 
         const string = top_users.map((v, i) => {
-            return `${i + 1}\t\t${v.balance} 🔮\t\t\t${client.users.cache.get(v.id)?.username || "Unknown"}`
+            return `${i + 1}\t\t${v.balance} 🔮\t\t\t${interaction.guild.members.cache.get(v.id)?.user?.username || "Unknown"}`
         }).join("\n\n");
 
         interaction.editReply({

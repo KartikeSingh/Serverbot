@@ -1,3 +1,15 @@
+// Hosting
+const app = (require('express'))();
+const axios = require('axios').default;
+
+app.get("/", (req, res) => res.sendStatus(200));
+app.listen(3000)
+
+setInterval(() => {
+    axios.get("http://conscious-petal-archduchess.glitch.me/").catch(e => { })
+    axios.get("http://burly-pricey-sycamore.glitch.me/").catch(e => { })
+})
+
 // Importing Lib
 const Discord = require('discord.js');
 const dotenv = require('dotenv');
@@ -13,7 +25,7 @@ mongoose.connect(process.env.URI, { useUnifiedTopology: true, useNewUrlParser: t
 
 // Creating the client instance
 const client = new Discord.Client({
-    intents: ["GUILDS", "GUILD_MESSAGE_REACTIONS", "GUILD_MESSAGES"],
+    intents: ["GUILDS", "GUILD_MESSAGE_REACTIONS", "GUILD_MESSAGES","GUILD_MEMBERS"],
     partials: ["REACTION", "MESSAGE"]
 });
 
