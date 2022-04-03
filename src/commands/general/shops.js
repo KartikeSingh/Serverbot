@@ -29,7 +29,7 @@ module.exports = {
             description: "Get information of a shop",
             type: 1,
             options: [{
-                name: "shop-id",
+                name: "shop-name",
                 description: "ID of the shop you want to check",
                 type: 3,
                 required: true
@@ -46,8 +46,8 @@ module.exports = {
         });
 
         const show = interaction.options.getString("shop-state"),
-            id = interaction.options.getString("shop-id"),
-            shop = await shops.findOne({ id }),
+            r = new RegExp(`^${interaction.options.getString("shop-name")?.toLowerCase()}$`, "i"),
+            shop = await shops.findOne({ name: { $regex: r } }),
             option = interaction.options.getSubcommand();
 
         if (option === "list") {
@@ -55,17 +55,24 @@ module.exports = {
                 open = list.filter(v => !v.closed),
                 close = list.filter(v => v.closed),
                 string =
-                    show === "open" ? open.map(v => `\`${v.id}\` - **${v.name}**`).join("\n") :
-                        show === "close" ? close.map(v => `\`${v.id}\` - **${v.name}**`).join("\n") :
-                            "Open Shops\n" + open.map(v => `\`${v.id}\` - **${v.name}**`).join("\n") + "\n\nClosed Shops" + close.map(v => `\`${v.id}\` - **${v.name}**`).join("\n");
+                    show === "open" ? open.map(v => `\`${v.id}\` - **${v.name}**`).join("\n") || "No Open Shops" :
+                        show === "close" ? close.map(v => `\`${v.id}\` - **${v.name}**`).join("\n") || "No Closed Shops" :
+                            "**Open Shops**\n" + (open.map(v => `\`${v.id}\` - **${v.name}**`).join("\n") || "**No Open Shops**") + "\n\n**Closed Shops**\n" + (close.map(v => `\`${v.id}\` - **${v.name}**`).join("\n") || "**No Closed Shops**");
 
             interaction.editReply({
                 embeds: [{
                     title: `List of ${show || "all"} shops`,
-                    description: `ID - Name\n\n${string}`
+                    description: `\`ID\` - **Name**\n\n${string}`
                 }]
             });
         } else if (option === "info") {
+            if (!shop) return interaction.editReply({
+                embeds: [{
+                    color: "RED",
+                    title: "❌ Invalid Shop Name"
+                }]
+            });
+
             interaction.editReply({
                 embeds: [{
                     title: `${shop.name}'s Details`,

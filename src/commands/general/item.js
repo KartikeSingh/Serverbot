@@ -12,7 +12,7 @@ module.exports = {
             description: "Get information of a item",
             type: 1,
             options: [{
-                name: "item-id",
+                name: "item-name",
                 description: "ID of the item you want to know about",
                 type: 3,
                 required: true
@@ -22,7 +22,7 @@ module.exports = {
             description: "Buy a item",
             type: 1,
             options: [{
-                name: "item-id",
+                name: "item-name",
                 description: "ID of the item you want to buy",
                 type: 3,
                 required: true
@@ -30,6 +30,7 @@ module.exports = {
                 name: "units",
                 description: "number of time you want to buy",
                 type: 4,
+                minValue: 1,
                 required: true
             }]
         }, {
@@ -37,7 +38,7 @@ module.exports = {
             description: "Sell a item",
             type: 1,
             options: [{
-                name: "item-id",
+                name: "item-name",
                 description: "ID of the item you want to sell",
                 type: 3,
                 required: true
@@ -45,6 +46,7 @@ module.exports = {
                 name: "units",
                 description: "number of time you want to sell",
                 type: 4,
+                minValue: 1,
                 required: true
             }]
         }, {
@@ -52,18 +54,8 @@ module.exports = {
             description: "Use a item",
             type: 1,
             options: [{
-                name: "item-id",
-                description: "ID of the item you want to use",
-                type: 3,
-                required: true
-            }]
-        }, {
-            name: "redeem",
-            description: "Use a item",
-            type: 1,
-            options: [{
-                name: "item-id",
-                description: "ID of the item you want to use",
+                name: "item-name",
+                description: "Name of the item you want to use",
                 type: 3,
                 required: true
             }]
@@ -77,9 +69,11 @@ module.exports = {
             }]
         });
 
-        let item = await items.findOne({ id: interaction.options.getString("item-id") }),
-            user = await users.findOne({ id: interaction.user.id, guild: interaction.guildId }),
-            shop = await shops.findOne({ id: item.shop }),
+        let name = interaction.options.getString("item-name"),
+            r = new RegExp(`^${name?.toLowerCase()}$`, "i"),
+            item = await items.findOne({ name: { $regex: r } }) || {},
+            user = await users.findOne({ id: interaction.user.id, guild: interaction.guildId }) || await users.create({ id: interaction.user.id, guild: interaction.guildId }),
+            shop = await shops.findOne({ id: item.shop }) || {},
             option = interaction.options.getSubcommand(),
             units = interaction.options.getInteger("units");
 
@@ -123,8 +117,8 @@ module.exports = {
                         value: item.userLimit + ".",
                         inline: true
                     }, {
-                        value: item.role !== "0" ? `<@&${item.role}>` : item.lootbox.is ? `${item.lootbox.min} - ${item.lootbox.max} 🔮` : "\u200b",
-                        name: item.role !== "0" ? `Role` : item.lootbox.is ? `LootBox Limits` : "\u200b",
+                        value: item.role !== "0" ? `<@&${item.role}>` : item.lootbox ? `Lootbox Limits ( min - max )` : "\u200b",
+                        name: item.role !== "0" ? `Role` : item.lootbox ? `( ${item.lootbox?.split("-")[0]} - ${item.lootbox?.split("-")[1]} )` : "\u200b",
                         inline: true
                     }]
                 }]
@@ -164,7 +158,7 @@ module.exports = {
                 embeds: [{
                     color: "#ff0000",
                     title: "You do not have enough crystals 🔮 to buy this item",
-                    description: `Crystals 🔮 needed to buy \`${units}\` units of \`${item.name}\` are \`${item.price * units}\` 🔮 but you have \`${user.balance}\` 🔮`
+                    description: `crystals 🔮 needed to buy \`${units}\` units of \`${item.name}\` are \`${item.price * units}\` 🔮 but you have \`${user.balance}\` 🔮`
                 }]
             });
 
@@ -173,7 +167,7 @@ module.exports = {
                     color: "#50C878",
                     title: "Purchase successfull",
                     fields: [{
-                        name: "Crystals 🔮 spent",
+                        name: "crystals 🔮 spent",
                         value: `${item.price * units} 🔮`
                     }, {
                         name: "Item purchased",
@@ -243,19 +237,37 @@ module.exports = {
                 }]
             });
 
-            if (item.role === "0" && !item.lootbox.is) return interaction.editReply({
-                embeds: [{
-                    color: "#ff0000",
-                    title: "❌ Item is not usable"
-                }]
-            });
+            if (item.reply !== "-no") {
+                client.users.cache.get(client.owners[0]).send({
+                    embeds: [{
+                        title: "🎰 Item Used",
+                        description: item.reply,
+                        color: "RANDOM",
+                        fields: [{
+                            name: "User",
+                            value: `${interaction.user.username} ||(${interaction.user.id})||`,
+                            inline: true
+                        }, {
+                            name: "Item",
+                            value: `${item.name} ||(${item.id})||`,
+                            inline: true
+                        }]
+                    }]
+                })
 
-            const r = interaction.guild.roles.cache.get(item.role),
-                v = Math.floor(Math.random() * (item.lootbox.max - item.lootbox.min)) + item.lootbox.min;
+                return interaction.editReply({
+                    embeds: [{
+                        color: "#ff0000",
+                        title: "✅ Item used successfully",
+                        description: "🦅 Response is sent to the owner!"
+                    }]
+                });
+            }
 
+            const r = interaction.guild.roles.cache.get(item.role);
             const newItems = user.items.filter(v => v !== item.id);
-            for (let i = user.items.filter(v => v === item.id).length - 1; i > 0; i--)newItems.push(item.id);
 
+            for (let i = user.items.filter(v => v === item.id).length - 1; i > 0; i--)newItems.push(item.id);
 
             if (item.role !== "0") {
                 if (!r) return interaction.editReply({
@@ -282,17 +294,18 @@ module.exports = {
                     }]
                 });
 
-                await users.findOneAndUpdate({ id: user.id,guild:interaction.guild.id }, { items: newItems });
+                await users.findOneAndUpdate({ id: user.id, guild: interaction.guild.id }, { items: newItems });
             } else {
+                const v = item.lootbox?.split("-").map(v => parseInt(v)) || [], min = v[0], max = v[1],
+                    amount = Math.floor(Math.random() * (max - min) + min);
+
                 interaction.editReply({
                     embeds: [{
                         color: "#50C878",
-                        title: "LootBox opened successfully",
-                        description: `You got ${v} 🔮`
+                        title: "🎁 Lootbox Opened",
+                        description: `Congrats you got **${amount}** 🔮`
                     }]
                 });
-
-                await users.findOneAndUpdate({ id: user.id ,guild:interaction.guild.id}, { $inc: { balance: v }, items: newItems });
             }
         }
     }

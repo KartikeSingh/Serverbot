@@ -3,7 +3,7 @@ const users = require('../../models/user');
 module.exports = {
     data: {
         name: "shop-limit",
-        description: "Se limit on number of shop a user can create",
+        description: "Set limit on number of shop a user can create",
         options: [{
             name: "user",
             type: 6,
@@ -35,13 +35,13 @@ module.exports = {
             }]
         });
 
+        await users.findOneAndUpdate({ guild: interaction.guildId, id: interaction.user.id }, { shopLimit: limit })
+
         interaction.editReply({
             embeds: [{
                 title: `Succesffuly setted shop limit for ${user.username} to ${limit}`,
                 color: "#50C878"
             }]
         })
-
-        await users.findOneAndUpdate({ guild: interaction.guildId, id: interaction.user.id }, { shopLimit: limit })
     }
 }

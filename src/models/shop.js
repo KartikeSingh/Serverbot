@@ -13,4 +13,4 @@ const shopSchema = new Schema({
     }
 })
 
-module.exports = model("Shop_Config_economy", shopSchema);
+module.exports = model("Shop_Config_economy_2", shopSchema);

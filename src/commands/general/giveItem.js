@@ -12,7 +12,7 @@ module.exports = {
             required: true
         }, {
             name: "item",
-            description: "ID of item you want to give",
+            description: "Name of item you want to give",
             type: 3,
             required: true
         }, {
@@ -31,15 +31,17 @@ module.exports = {
         });
 
         const u1 = await users.findOne({ id: interaction.user.id, guild: interaction.guildId }) || await users.create({ id: interaction.user.id, guild: interaction.guildId }),
-            item = await items.findOne({ id: interaction.options.getUser("item") }),
-            units = parseInt(interaction.options.getInteger("units")) || 1,
+            itemName = interaction.options.getString("item"),
+            r3 = new RegExp(`^${itemName?.toLowerCase()}$`, "i"),
+            item = await items.findOne({ name: { $regex: r3 } }),
+            units = interaction.options.getInteger("units") || 1,
             user2 = interaction.options.getUser("user"),
+            u2 = await users.findOne({ id: user2.id, guild: interaction.guildId }),
             g = u1.items.filter(v => v === item.id);
-
 
         if (g.length < units) return interaction.editReply({
             embeds: [{
-                title: `❌ You do not have ${units} ${item.name}`,
+                title: `❌ You do not have \`${units}\` **${item.name}**`,
                 color: "#ff0000"
             }]
         });
@@ -47,16 +49,16 @@ module.exports = {
         const u1_items = u1.items.filter(v => v !== item.id);
         const u2_items = u2.items;
 
-        for (let i = g.length > units; i > 0; i--)u1_items.push(item.id);
+        for (let i = g.length - units; i > 0; i--)u1_items.push(item.id);
         for (let i = units; i > 0; i--)u2_items.push(item.id);
 
         await users.findOneAndUpdate({ id: interaction.user.id, guild: interaction.guildId }, { items: u1_items });
-        const u2 = await users.findOneAndUpdate({ id: user2.id, guild: interaction.guildId }, { items: u2_items }, { new: true }) || await users.create({ id: user2.id, guild: interaction.guildId, items: u2_items });
+        await users.findOneAndUpdate({ id: user2.id, guild: interaction.guildId }, { items: u2_items }, { new: true }) || await users.create({ id: user2.id, guild: interaction.guildId, items: u2_items });
 
         interaction.editReply({
             embeds: [{
-                title: `Transaction ended successfully`,
-                description: "Use /inventory command to check your inventory"
+                title: `💱 Transaction successfully`,
+                description: `**${interaction.user.username}** successfully gave \`${units}\` **${item.name}** to **${user2.username}**`
             }]
         })
     }

@@ -1,7 +1,7 @@
 const { MessageActionRow, MessageButton } = require("discord.js");
 
 module.exports = async function pagination(interaction, embeds, start = 0, emojis = ["⬅", "➡", "❌"], timeout = 60000) {
-    let index = start,
+    let index = (start >= embeds.length || start < 0) ? 0 : start,
         row = new MessageActionRow().addComponents([
             new MessageButton().setCustomId("1_embed_page").setStyle("PRIMARY").setEmoji(emojis[0]),
             new MessageButton().setCustomId("2_embed_page").setStyle("PRIMARY").setEmoji(emojis[1]),

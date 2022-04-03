@@ -1,15 +1,14 @@
 const shops = require('../../models/shop');
 const Items = require('../../models/item');
 const paginator = require('../../utility/page');
-const { MessageEmbed } = require('discord.js');
 
 module.exports = {
     data: {
         name: "items",
         description: "Get items of a shop",
         options: [{
-            name: "shop-id",
-            description: "ID of the shop you want to know about",
+            name: "shop-name",
+            description: "Name of the shop you want to know about",
             type: 3,
             required: true
         }, {
@@ -27,7 +26,8 @@ module.exports = {
             }]
         });
 
-        const shop = await shops.findOne({ id: interaction.options.getString("shop-id") }),
+        const r = new RegExp(`^${interaction.options.getString("shop-name")?.toLowerCase()}$`, "i")
+        const shop = await shops.findOne({ name: { $regex: r } }),
             items = await Items.find({ shop: shop.id });
 
         if (!shop) return interaction.editReply({
@@ -41,7 +41,7 @@ module.exports = {
         const page = interaction.options.getInteger("Page") || 0;
 
         items.forEach((v, i) => {
-            pages[parseInt(i / 10)] ? pages[parseInt(i / 10)].description += `\n\n${i + 1}. ${v.name}\nID: \`${v.id}\`\t\tPrice: **${v.price}**\n${v.description.small}\n${v.role !== "0" ? `Role Reward: <@&${v.role}>` : v.lootbox.is ? `LootBox Reward: ${v.lootbox.min} - ${v.lootbox.max} 🔮` : ""}`
+            pages[parseInt(i / 10)] ? pages[parseInt(i / 10)].description += `\n\n${i + 1}. ${v.name}\nID: \`${v.id}\`\t\tPrice: **${v.price}**\n${v.description.small}\n${v.role !== "0" ? `Role Reward: <@&${v.role}>` : v.lootbox ? `Lootbox limits : ${v.lootbox}` : ""}`
                 : pages[parseInt(i / 10)] = {
                     title: `${shop.name}'s Items`,
                     footer: {
@@ -50,7 +50,7 @@ module.exports = {
                     tumbnail: {
                         url: shop.image
                     },
-                    description: `${shop.closed ? "**Shop is closed**" : ""}\n\n${i + 1}. ${v.name}\nID: \`${v.id}\`\t\tPrice: **${v.price}**\n${v.description.small}\n${v.role !== "0" ? `Role Reward: <@&${v.role}>` : v.lootbox.is ? `LootBox Reward: ${v.lootbox.min} - ${v.lootbox.max} 🔮` : ""}`
+                    description: `${shop.closed ? "**Shop is closed**" : ""}\n\n${i + 1}. ${v.name}\nID: \`${v.id}\`\t\tPrice: **${v.price}**\n${v.description.small}\n${v.role !== "0" ? `Role Reward: <@&${v.role}>` : v.lootbox ? `Lootbox limits : ${v.lootbox}` : ""}`
                 };
 
             if (i === items.length - 1) paginator(interaction, pages, page, ["⬅", "➡", "❌"], 300000);

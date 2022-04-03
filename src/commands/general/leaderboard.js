@@ -9,11 +9,11 @@ module.exports = {
     run: async (client, interaction) => {
         await interaction.reply({
             embeds: [{
-                title: "🔃 Fetching Data 📄",
+                title: "📄 Fetching Data",
             }]
         });
 
-        const top_users = await users.find({ guild: interaction.guildId }).sort({ balance: -1 }).limit(10);
+        const top_users = (await users.find({ guild: interaction.guildId }).limit(10)).sort((a,b) => b.balance - a.balance);
 
         if (top_users.length < 1) return interaction.editReply({
             embeds: [{
@@ -22,14 +22,18 @@ module.exports = {
             }]
         });
 
-        const string = top_users.map((v, i) => {
-            return `${i + 1}\t\t${v.balance} 🔮\t\t\t${interaction.guild.members.cache.get(v.id)?.user?.username || "Unknown"}`
-        }).join("\n\n");
+        let string = "";
+
+        for (let i = 0; i < top_users.length; i++) {
+            const v = top_users[i];
+
+            string += `\`${i + 1}.\` \t \t **${v.balance}** 🔮 \t \t \t ** ${(await client.users.fetch(v.id).catch(e => "unknown"))?.username || "Unknown"}**\n`
+        }
 
         interaction.editReply({
             embeds: [{
-                title: `Transaction ended successfully`,
-                description: "Rank.\t\tCrystals 🔮\t\tUser\n\n" + string
+                title: `📊 Server Leaderboard`,
+                description: string
             }]
         })
     }

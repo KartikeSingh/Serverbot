@@ -34,7 +34,7 @@ module.exports = {
             type: 1,
             description: "Permanently remove your shop",
             options: [{
-                name: "shop-id",
+                name: "shop-name",
                 description: "ID of the shop you want to remove",
                 type: 3,
                 required: true
@@ -44,7 +44,7 @@ module.exports = {
             type: 1,
             description: "Temporarily close your shop",
             options: [{
-                name: "shop-id",
+                name: "shop-name",
                 description: "ID of the shop you want to close",
                 type: 3,
                 required: true
@@ -54,7 +54,7 @@ module.exports = {
             type: 1,
             description: "Open your shop",
             options: [{
-                name: "shop-id",
+                name: "shop-name",
                 description: "ID of the shop you want to open",
                 type: 3,
                 required: true
@@ -64,7 +64,7 @@ module.exports = {
             type: 1,
             description: "Edit your shop",
             options: [{
-                name: "shop-id",
+                name: "shop-name",
                 description: "ID of the shop you want to open",
                 type: 3,
                 required: true
@@ -89,7 +89,7 @@ module.exports = {
             type: 1,
             description: "Add a new item to your shop",
             options: [{
-                name: "shop-id",
+                name: "shop-name",
                 description: "ID of the shop in which you want to add the item",
                 type: 3,
                 required: true
@@ -106,6 +106,11 @@ module.exports = {
             }, {
                 name: "small-description",
                 description: "Small description of the item",
+                type: 3,
+                required: true
+            }, {
+                name: "reply",
+                description: "The message I should send to the owner, when this item is used (don't works for role/lootboxes)",
                 type: 3,
                 required: true
             }, {
@@ -135,7 +140,7 @@ module.exports = {
                 required: false
             }, {
                 name: "lootbox",
-                description: "If it is a lootbox, give min & max crystal limit like 10-100",
+                description: "Lootbox limits, min-max example: 5-10",
                 type: 3,
                 required: false
             }]
@@ -144,7 +149,7 @@ module.exports = {
             type: 1,
             description: "Edit a item of your shop",
             options: [{
-                name: "item-id",
+                name: "item-name",
                 description: "ID of the item you want to edit",
                 type: 3,
                 required: true
@@ -157,6 +162,11 @@ module.exports = {
                 name: "price",
                 description: "New price of this item",
                 type: 4,
+                required: false
+            }, {
+                name: "reply",
+                description: "The message I should send to the owner, when this item is used (don't works for role/lootboxes)",
+                type: 3,
                 required: false
             }, {
                 name: "small-description",
@@ -190,7 +200,7 @@ module.exports = {
                 required: false
             }, {
                 name: "lootbox",
-                description: "If it is a lootbox, give min & max crystal limit like 10-100, type 0 for no lootbox",
+                description: "Lootbox limits, min-max example: 5-10",
                 type: 3,
                 required: false
             }]
@@ -199,7 +209,7 @@ module.exports = {
             type: 1,
             description: "Remove a item form your shop",
             options: [{
-                name: "item-id",
+                name: "item-name",
                 description: "ID of the item you want to edit",
                 type: 3,
                 required: true
@@ -216,17 +226,26 @@ module.exports = {
 
 
         let option = interaction.options.getSubcommand(),
-            id = interaction.options.getString("shop-id"),
-            itemId = interaction.options.getString("item-id"),
-            item = await items.findOne({ id: itemId }) || {},
-            shop = await shops.findOne({ id }) || await shops.findOne({ id: item?.shop }) || {},
-            name = interaction.options.getString("name"),
+            id = interaction.options.getString("shop-name")?.replace(/\$/g, "\$"),
+            name = interaction.options.getString("name")?.replace(/\$/g, "\$"),
+            itemName = interaction.options.getString("item-name")?.replace(/\$/g, "\$"),
+            r = new RegExp(`^${id?.toLowerCase()}$`, "i"),
+            r2 = new RegExp(`^${name?.toLowerCase()}$`, "i"),
+            r3 = new RegExp(`^${itemName?.toLowerCase()}$`, "i"),
+            item = await items.findOne({
+                $or: [
+                    { name: { $regex: r2 } },
+                    { name: { $regex: r3 } },
+                ]
+            }) || {},
+            shop = await shops.findOne({ $or: [{ name: { $regex: r } }, { id: item?.shop }, { name: { $regex: r2 } }] }) || {},
             guild = await guilds.findOne({ id: interaction.guildId }) || {},
             price = interaction.options.getInteger("price"),
             pieces = interaction.options.getInteger("pieces") || 100,
             userLimit = interaction.options.getInteger("user-limit") || 100,
             role = interaction.options.getRole("role")?.id || "0",
-            lootBox = interaction.options.getString("lootbox") || "0",
+            lootbox = interaction.options.getString("lootbox"),
+            reply = interaction.options.getString("reply"),
             small_description = interaction.options.getString("small-description"),
             large_description = interaction.options.getString("large-description"),
             description = interaction.options.getString("description"),
@@ -264,10 +283,17 @@ module.exports = {
         });
 
         if (option === "create") {
-            const s = await shops.find({ owner: interaction.user.id });
-            const user = await users.findOne({ id: interaction.user.id ,guild:interaction.guild.id});
+            if (shop?.id) return interaction.editReply({
+                embeds: [{
+                    color: "#ff0000",
+                    title: "❌ A shop with same name already exist"
+                }]
+            });
 
-            if (s.length >= user.shopLimit) return interaction.editReply({
+            const s = await shops.find({ owner: interaction.user.id, guild: interaction.guild.id });
+            const user = await users.findOne({ id: interaction.user.id, guild: interaction.guild.id });
+
+            if ((s.length || 0) >= (typeof user?.shopLimit === "number" ? user?.shopLimit : 2)) return interaction.editReply({
                 embeds: [{
                     color: "#ff0000",
                     title: `You reached max shop limit (${user.shopLimit})`
@@ -293,12 +319,14 @@ module.exports = {
             });
 
         } else if (option === "remove") {
-            if (!shop) return interaction.editReply({
+            if (!shop?.id) return interaction.editReply({
                 embeds: [{
                     color: "#ff0000",
                     title: "❌ Shop not found"
                 }]
             });
+
+            const items_ = await items.find({ shop: shop.id });
 
             interaction.editReply({
                 embeds: [{
@@ -310,15 +338,19 @@ module.exports = {
                         inline: true
                     }, {
                         name: "Shop ID",
-                        value: id,
+                        value: `${shop.id}`,
                         inline: true
                     }]
                 }]
             });
 
-            await shops.findOneAndDelete({ id });
+            items_.forEach(async v => {
+                await items.findOneAndDelete({ id: v.id });
+            })
+
+            await shops.findOneAndDelete({ name: { $regex: r } });
         } else if (option === "close") {
-            if (!shop) return interaction.editReply({
+            if (!shop?.id) return interaction.editReply({
                 embeds: [{
                     color: "#ff0000",
                     title: "❌ Shop not found"
@@ -348,9 +380,9 @@ module.exports = {
                 }]
             });
 
-            await shops.findOneAndUpdate({ id }, { closed: true });
+            await shops.findOneAndUpdate({ name: { $regex: r } }, { closed: true });
         } else if (option === "open") {
-            if (!shop) return interaction.editReply({
+            if (!shop?.id) return interaction.editReply({
                 embeds: [{
                     color: "#ff0000",
                     title: "❌ Shop not found"
@@ -380,10 +412,10 @@ module.exports = {
                 }]
             });
 
-            await shops.findOneAndUpdate({ id }, { closed: false });
+            await shops.findOneAndUpdate({ name: { $regex: r } }, { closed: false });
         } else if (option === "edit") {
 
-            if (!shop) return interaction.editReply({
+            if (!shop?.id) return interaction.editReply({
                 embeds: [{
                     color: "#ff0000",
                     title: "❌ Shop not found"
@@ -400,6 +432,7 @@ module.exports = {
             name = name || shop.name;
             image = image || shop.image;
             description = description || shop.description;
+
             interaction.editReply({
                 embeds: [{
                     color: "#50C878",
@@ -418,7 +451,7 @@ module.exports = {
                         inline: true
                     }, {
                         name: "Shop Description",
-                        value: description.slice(0, 256) + description.length > 256 ? "..." : "" || "No Description",
+                        value: description.slice(0, 256) + (description.length > 256 ? "..." : "") || "No Description",
                         inline: true
                     }],
                     image: {
@@ -427,16 +460,21 @@ module.exports = {
                 }]
             });
 
-            await shops.findOneAndUpdate({ id }, { name, image, description });
+            await shops.findOneAndUpdate({ name: { $regex: r } }, { name, image, description });
         } else if (option === "add-item") {
-
-            if (!shop) return interaction.editReply({
+            if (!shop?.id) return interaction.editReply({
                 embeds: [{
                     color: "#ff0000",
                     title: "❌ Invalid Shop ID was provided"
                 }]
             });
 
+            if (item?.id) return interaction.editReply({
+                embeds: [{
+                    color: "#ff0000",
+                    title: "❌ An Item already exist with the name " + item?.name
+                }]
+            });
 
             if (price < 1) price = await fixIt(client, interaction, "price", interaction.user, "number");
 
@@ -460,18 +498,29 @@ module.exports = {
                     title: "❌ Pieces or userLimit can't be less than 0"
                 }]
             });
-            if (role !== "0" && lootBox !== "0") {
-                var v = await fixIt(client, interaction, "yes-no", interaction.user, null, "A item can't be both role & lootbox,\nReact with ✔ to make it a **lootbox**\nReact with ❌ to make it a **role**")
+
+            if (role !== "0" && lootbox) {
+                var v = await fixIt(client, interaction, "yes-no", interaction.user, null, "A item can't be both role & a lootbox ticket,\nReact with ✔ to make it a **lootbox**\nReact with ❌ to make it a **role**")
 
                 if (v === true) role = "0"
-                else if (v === false) lootBox = "0"
+                else if (v === false) lootbox = "0"
             }
 
-            if (v === undefined && role !== "0" && lootBox !== "0") return;
+            if (v === undefined && role !== "0" && lootbox !== "0") return;
+
+            let lv = lootbox?.split("-")?.map(v => parseInt(v));
+
+            if (lootbox && lootbox !== "0" && lv?.length !== 2 && lv?.every(v => typeof (v) === "number") && (parseInt(lootbox?.split("-")[0]) > lootbox?.split("-")[1])) return interaction.editReply({
+                embeds: [{
+                    color: "RED",
+                    title: "❌ Invalid Lootbox Limits",
+                    description: "Lootbox limits should be like min-max example: 5-10"
+                }]
+            })
 
             if (!large_description) large_description = small_description;
 
-            const item = await items.create({
+            item = await items.create({
                 id: createID(12, ["letter", "number"]),
                 name,
                 shop: shop.id,
@@ -480,11 +529,8 @@ module.exports = {
                 userLimit,
                 role,
                 image,
-                lootbox: {
-                    is: lootBox !== "0",
-                    min: parseInt(lootBox.split("-")[0]?.trim()) || 0,
-                    max: parseInt(lootBox.split("-")[1]?.trim()) || 0,
-                },
+                lootbox,
+                reply,
                 description: {
                     small: small_description,
                     large: large_description
@@ -524,14 +570,14 @@ module.exports = {
                         value: item.userLimit + ".",
                         inline: true
                     }, {
-                        value: role !== "0" ? `<@&${role}>` : lootBox !== "0" ? `${item.lootbox.min} - ${item.lootbox.max} 🔮` : "\u200b",
-                        name: role !== "0" ? `Role` : lootBox !== "0" ? `LootBox Limits` : "\u200b",
+                        value: item.role !== "0" ? `<@&${item.role}>` : item.lootbox ? `Lootbox Limits ( min - max )` : "\u200b",
+                        name: item.role !== "0" ? `Role` : item.lootbox ? `( ${item.lootbox?.split("-")[0]} - ${item.lootbox?.split("-")[1]} )` : "\u200b",
                         inline: true
                     }]
                 }]
             });
         } else if (option === "edit-item") {
-            if (!item) return interaction.editReply({
+            if (!item?.id) return interaction.editReply({
                 embeds: [{
                     title: "❌ Invalid Item was provided",
                     color: "#ff00000"
@@ -539,11 +585,12 @@ module.exports = {
             });
 
             price = price || item.price;
+            reply = reply || item.reply;
             name = name || item.name;
             pieces = pieces || item.pieces;
             userLimit = userLimit || item.userLimit;
             role = role || item.role;
-            lootBox = lootBox || item.lootBox.min + ":" + item.lootBox.max;
+            lootbox = lootbox || item.lootbox;
             small_description = small_description || item.description?.small;
             large_description = large_description || item.description?.large;
             image = image || item.image;
@@ -570,23 +617,26 @@ module.exports = {
                     title: "❌ Pieces or userLimit can't be less than 0"
                 }]
             });
-
-            if (role !== "0" && lootBox !== "0") {
-                var v = await fixIt(client, interaction, "yes-no", interaction.user, null, "A item can't be both role & lootbox,\nReact with ✔ to make it a **lootbox**\nReact with ❌ to make it a **role**")
+            if (role !== "0" && lootbox !== "0") {
+                var v = await fixIt(client, interaction, "yes-no", interaction.user, null, "A item can't be both role & a lootbox ticket,\nReact with ✔ to make it a **lootbox**\nReact with ❌ to make it a **role**")
 
                 if (v === true) role = "0"
-                else if (v === false) lootBox = "0"
+                else if (v === false) lootbox = "0"
             }
 
-            if (v === undefined && role !== "0" && lootBox !== "0") return;
+            if (v === undefined && role !== "0" && lootbox) return;
 
-            if (lootBox !== "0" && lootBox.split("-").length !== 2 && !lootBox.split("-").every(v => typeof (parseInt(v)) === "number")) return interaction.editReply({
+            let lv = lootbox?.split("-")?.map(v => parseInt(v));
+
+            if (lootbox !== "0" && lv?.length !== 2 && lv?.every(v => typeof (v) === "number") && (parseInt(lootbox?.split(" - ")[0]) > lootbox?.split(" - ")[1])) return interaction.editReply({
                 embeds: [{
-                    color: "#ff0000",
-                    title: "Lootbox value was filled in incorrect format",
-                    description: "Try again later, correct format => \`minValue-maxValue\`"
+                    color: "RED",
+                    title: "❌ Invalid Lootbox Limits",
+                    description: "Lootbox limits should be like min-max example: 5-10"
                 }]
             })
+
+            if (lootbox === "0") lootbox = null;
 
             item = await items.findOneAndUpdate(
                 { id: item.id }, {
@@ -596,12 +646,9 @@ module.exports = {
                 pieces,
                 userLimit,
                 role,
+                reply,
                 image,
-                lootBox: {
-                    is: lootBox !== "0",
-                    min: parseInt(lootBox.split("-")[0]?.trim()) || 0,
-                    max: parseInt(lootBox.split("-")[1]?.trim()) || 0,
-                },
+                lootbox,
                 description: {
                     small: small_description,
                     large: large_description
@@ -637,14 +684,13 @@ module.exports = {
                         value: item.userLimit + ".",
                         inline: true
                     }, {
-                        value: role !== "0" ? `<@&${role}>` : lootBox !== "0" ? `${item.lootbox.min} - ${item.lootbox.max} 🔮` : "\u200b",
-                        name: role !== "0" ? `Role` : lootBox !== "0" ? `LootBox Limits` : "\u200b",
-                        inline: true
+                        value: item.role !== "0" ? `<@&${item.role}>` : item.lootbox ? `Lootbox Limits ( min - max )` : "\u200b",
+                        name: item.role !== "0" ? `Role` : item.lootbox ? `( ${item.lootbox?.split("-")[0]} - ${item.lootbox?.split("-")[1]} )` : "\u200b",
                     }]
                 }]
             });
         } else if (option === "remove-item") {
-            if (!item) return interaction.editReply({
+            if (!item?.id) return interaction.editReply({
                 embeds: [{
                     color: "#ff0000",
                     title: "❌ Item not found",
@@ -658,7 +704,7 @@ module.exports = {
                 }]
             });
 
-            await items.findOneAndDelete({ id: itemId });
+            await items.findOneAndDelete({ name: itemName });
         }
     }
 }

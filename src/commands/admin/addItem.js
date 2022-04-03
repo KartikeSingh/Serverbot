@@ -7,12 +7,12 @@ module.exports = {
         description: "Add some item to a user",
         options: [{
             name: "user",
-            description: "The user whom you want to give the crystals",
+            description: "The user whom you want to give the item",
             type: 6,
             required: true
         }, {
-            name: "id",
-            description: "The id of the item you want to give the user",
+            name: "item-name",
+            description: "Name of the item you want to use",
             type: 3,
             required: true
         }],
@@ -26,9 +26,11 @@ module.exports = {
             }]
         });
 
-        const itemID = interaction.options.getString("id"),
-            user = interaction.options.getUser("user"),
-            item = await items.findOne({ id: itemID });
+        const
+            name = interaction.options.getString("item-name"),
+            r = new RegExp(`^${name?.toLowerCase()}$`, "i"),
+            item = await items.findOne({ name: { $regex: r } }),
+            user = interaction.options.getUser("user");
 
         if (!item) return interaction.editReply({
             embeds: [{
